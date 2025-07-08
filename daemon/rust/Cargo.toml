@@ -1,0 +1,16 @@
+# /CRFzit/daemon/rust/Cargo.toml
+[package]
+name = "crfzit_core"
+version = "1.0.0"
+edition = "2021"
+
+[lib]
+name = "crfzit_core_logic"
+crate-type = ["staticlib"] # 我们要编译成一个静态库给C++链接
+
+[dependencies]
+cxx = "1.0"
+# 我们将在后续阶段添加tokio, prost等依赖
+
+[build-dependencies]
+cxx-build = "1.0"

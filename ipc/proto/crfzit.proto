@@ -1,0 +1,122 @@
+// /CRFzit/ipc/proto/crfzit.proto
+
+syntax = "proto3";
+package crfzit.ipc;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+// --- Enums ---
+enum FreezeMode {
+  V2_FREEZE = 0;
+  V1_FREEZE = 1;
+  SIGSTOP = 2;
+  KILL = 3;
+}
+enum NetworkPolicy {
+  NET_ALLOW_ALL = 0;
+  NET_WIFI_ONLY = 1;
+  NET_BLOCK_ALL = 2;
+}
+enum OomPriority {
+  OOM_HIGH = 0;
+  OOM_MEDIUM = 1;
+  OOM_LOW = 2;
+}
+enum ForegroundPolicy {
+  STRICT = 0;
+  LENIENT = 1;
+}
+
+// 仪表盘使用的应用状态
+enum AppDisplayStatus {
+  FOREGROUND = 0;
+  BACKGROUND_ACTIVE = 1;
+  FROZEN = 2;
+  KILLED = 3;
+  PENDING_FREEZE = 4;
+}
+
+// --- Messages ---
+// 单个应用的完整配置
+message AppConfig {
+  string package_name = 1;
+  FreezeMode freeze_mode = 2;
+  NetworkPolicy network_policy = 3;
+  OomPriority oom_priority = 4;
+  ForegroundPolicy foreground_policy = 5;
+  bool lenient_allow_playback = 6;
+  bool lenient_allow_notification = 7;
+  bool lenient_allow_network = 8;
+  bool is_whitelisted = 9;
+  bool allow_fcm_wakeup = 10;
+}
+
+// 仪表盘上单个应用的运行时状态
+message AppRuntimeState {
+  string package_name = 1;
+  AppDisplayStatus display_status = 2;
+  FreezeMode active_freeze_mode = 3; // 如果是FROZEN，指明具体方式
+  int64 memory_usage_kb = 4;
+  float cpu_usage_percent = 5;
+  int32 pending_freeze_sec = 6;     // 如果是PENDING_FREEZE，剩余秒数
+
+  // --- 状态指示器 ---
+  bool is_whitelisted = 10;
+  bool has_playback = 11;
+  bool has_notification = 12;
+  bool has_network_activity = 13;
+  bool is_foreground = 14;
+}
+
+// 全局实时状态
+message GlobalStats {
+  float total_cpu_usage_percent = 1;
+  int64 total_mem_kb = 2;
+  int64 avail_mem_kb = 3;
+  int64 network_speed_down_bps = 4;
+  int64 network_speed_up_bps = 5;
+  string active_profile_name = 6;
+}
+
+// 事件日志条目
+message EventLog {
+  google.protobuf.Timestamp timestamp = 1;
+  string event_description = 2;
+}
+
+// 从LSPosed模块上报的框架事件（暂时留空，后续填充）
+message FrameworkEvent {
+  string event_type = 1;
+  string package_name = 2;
+  string details = 3;
+}
+
+// --- Service Definitions ---
+
+// 配置管理服务
+service ConfigService {
+  rpc SetAppConfig(AppConfig) returns (google.protobuf.Empty);
+  rpc GetAllConfigs(google.protobuf.Empty) returns (stream AppConfig);
+  // ... 其他配置RPC
+}
+
+// 仪表盘数据流服务
+service DashboardService {
+  rpc StreamGlobalStats(google.protobuf.Empty) returns (stream GlobalStats);
+  // 注意：规格书中是 StreamActiveAppsState，返回 stream AppRuntimeState。
+  // 一次性返回完整列表在实践中更简单高效，我们定义一个包装消息。
+  rpc StreamActiveApps(google.protobuf.Empty) returns (stream ActiveAppsList);
+  rpc GetEventLogs(google.protobuf.Empty) returns (stream EventLog);
+}
+
+message ActiveAppsList {
+    repeated AppRuntimeState apps = 1;
+}
+
+
+// 系统事件接收服务
+service SystemService {
+  rpc ReportFrameworkEvent(FrameworkEvent) returns (google.protobuf.Empty);
+  // ... 其他系统级RPC
+}

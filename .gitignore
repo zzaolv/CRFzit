@@ -1,0 +1,15 @@
+# Build files
+/app/build/
+/daemon/build/
+/daemon/rust/target/
+
+# IDE files
+.idea/
+*.iml
+.gradle/
+
+# Local properties
+local.properties
+
+# Secrets and sensitive data
+*.keystore
