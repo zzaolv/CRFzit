@@ -40,9 +40,9 @@ protoc-gen-grpc-java = { group = "io.grpc", name = "protoc-gen-grpc-java", versi
 protoc-gen-grpc-kotlin = { group = "io.grpc", name = "protoc-gen-grpc-kotlin", version.ref = "grpcKotlin" }
 
 [plugins]
-android-application = { id = "com.android.application", version.ref = "agp" }
+android-application = { id = "com.android.application", version.ref = "agp" } # 请使用您自己的AGP版本
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-
 google-protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
+# <<< 新增：定义 Compose Compiler 插件 >>>
+kotlin-compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 
