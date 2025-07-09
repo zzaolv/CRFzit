@@ -1,4 +1,4 @@
-# 文件路径: /CRFzit/daemon/CMakeLists.txt (最终语法修正版)
+# 文件路径: /CRFzit/daemon/CMakeLists.txt (决战最终版)
 
 cmake_minimum_required(VERSION 3.20)
 project(crfzitd CXX C)
@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build all libraries statically")
+
 
 # --- 2. 依赖管理 ---
 include(FetchContent)
@@ -25,6 +26,7 @@ set(gRPC_BUILD_TESTS OFF CACHE BOOL "Disable gRPC tests")
 set(gRPC_BUILD_CSHARP_EXT OFF CACHE BOOL "Disable gRPC C# extensions")
 FetchContent_MakeAvailable(gRPC)
 
+
 # --- 3. Rust 库集成 ---
 include(ExternalProject)
 set(DAEMON_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
@@ -37,13 +39,14 @@ set(RUST_BRIDGE_LIBRARY_PATH ${RUST_OUTPUT_DIR}/libcrfzit_cxx_bridge.a)
 
 ExternalProject_Add(
     rust_logic_lib_build
-    # 【最终语法修正】: 所有参数都是独立的键值对
     SOURCE_DIR        ${RUST_SRC_DIR}
-    BUILD_COMMAND     ${CMAKE_COMMAND} -E env
-                          CARGO_TARGET_DIR=${RUST_BUILD_DIR}
-                          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=${CMAKE_CXX_COMPILER}
+    # 【最终修正】: 使用 BUILD_IN_SOURCE 选项，或者在 BUILD_COMMAND 中 cd
+    # 我们选择更明确的 BUILD_COMMAND，以避免任何歧义
+    BUILD_COMMAND     cd ${RUST_SRC_DIR} && \
+                      ${CMAKE_COMMAND} -E env \
+                          CARGO_TARGET_DIR=${RUST_BUILD_DIR} \
+                          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=${CMAKE_CXX_COMPILER} \
                           cargo build --release --target aarch64-linux-android
-    WORKING_DIRECTORY ${RUST_SRC_DIR} # <--- 移动到这里，并作为独立参数
     CONFIGURE_COMMAND ""
     INSTALL_COMMAND   ""
     BYPRODUCTS        ${RUST_LIBRARY_PATH} ${RUST_BRIDGE_LIBRARY_PATH}
@@ -56,6 +59,7 @@ add_dependencies(crfzit_core_logic rust_logic_lib_build)
 add_library(crfzit_cxx_bridge STATIC IMPORTED GLOBAL)
 set_property(TARGET crfzit_cxx_bridge PROPERTY IMPORTED_LOCATION ${RUST_BRIDGE_LIBRARY_PATH})
 add_dependencies(crfzit_cxx_bridge rust_logic_lib_build)
+
 
 # --- 4. Protobuf/gRPC C++ 代码生成 ---
 set(PROTO_SRC_DIR ${DAEMON_ROOT}/../ipc/proto)
@@ -73,6 +77,7 @@ add_custom_command(
 add_library(crfzit_proto ${PROTO_GEN_DIR}/crfzit.pb.cc ${PROTO_GEN_DIR}/crfzit.grpc.pb.cc)
 target_include_directories(crfzit_proto PUBLIC ${PROTO_GEN_DIR})
 target_link_libraries(crfzit_proto PUBLIC protobuf::libprotobuf grpc)
+
 
 # --- 5. 定义 crfzitd 可执行文件 ---
 add_executable(crfzitd
