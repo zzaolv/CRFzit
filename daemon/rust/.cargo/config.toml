@@ -1,0 +1,12 @@
+# 文件路径: /CRFzit/daemon/rust/.cargo/config.toml
+
+# 这个文件告诉 Cargo 在为特定目标编译时使用哪个链接器和编译器。
+
+[target.aarch64-linux-android]
+# 指定用于链接的 C/C++ 编译器。
+# Cargo 会将这个设置传递给 rustc 的 -C linker 参数。
+linker = "aarch64-linux-android35-clang"
+
+# 【关键】: 定义 rustc 本身。这不是必须的，但可以进一步确保一致性。
+# 我们将 rustflags 留空，因为 -C linker 已经足够了。
+# rustc = "rustc" 
