@@ -1,4 +1,4 @@
-# 文件路径: /CRFzit/daemon/CMakeLists.txt (最终正确版)
+# 文件路径: /CRFzit/daemon/CMakeLists.txt (最终完美版)
 
 cmake_minimum_required(VERSION 3.20)
 project(crfzitd CXX C)
@@ -29,8 +29,8 @@ FetchContent_MakeAvailable(gRPC)
 
 # --- 3. Rust 库集成 ---
 include(ExternalProject)
-# 【路径修正】: CMAKE_CURRENT_SOURCE_DIR 现在就是 daemon/ 目录
 set(DAEMON_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
+set(RUST_SRC_DIR ${DAEMON_ROOT}/rust) # 定义 Rust 源目录
 
 set(RUST_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/rust_build)
 set(RUST_OUTPUT_DIR ${RUST_BUILD_DIR}/aarch64-linux-android/release)
@@ -39,7 +39,9 @@ set(RUST_BRIDGE_LIBRARY_PATH ${RUST_OUTPUT_DIR}/libcrfzit_cxx_bridge.a)
 
 ExternalProject_Add(
     rust_logic_lib_build
-    SOURCE_DIR ${DAEMON_ROOT}/rust # 【路径修正】: 直接指向 rust/ 子目录
+    SOURCE_DIR ${RUST_SRC_DIR}
+    # 【最终修正】: 指定 cargo build 命令的工作目录
+    WORKING_DIRECTORY ${RUST_SRC_DIR}
     CONFIGURE_COMMAND ""
     INSTALL_COMMAND ""
     BUILD_COMMAND ${CMAKE_COMMAND} -E env
@@ -59,7 +61,7 @@ add_dependencies(crfzit_cxx_bridge rust_logic_lib_build)
 
 
 # --- 4. Protobuf/gRPC C++ 代码生成 ---
-set(PROTO_SRC_DIR ${DAEMON_ROOT}/../ipc/proto) # 【路径修正】
+set(PROTO_SRC_DIR ${DAEMON_ROOT}/../ipc/proto)
 set(PROTO_FILES ${PROTO_SRC_DIR}/crfzit.proto)
 set(PROTO_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/gen/proto)
 set(GRPC_CPP_PLUGIN_EXE $<TARGET_FILE:grpc_cpp_plugin>)
@@ -77,7 +79,6 @@ target_link_libraries(crfzit_proto PUBLIC protobuf::libprotobuf grpc)
 
 
 # --- 5. 定义 crfzitd 可执行文件 ---
-# 【路径修正】: 所有 C++ 源文件都需要加上 cpp/ 前缀
 add_executable(crfzitd
     cpp/main.cpp
     cpp/grpc_server.cpp
@@ -95,10 +96,9 @@ target_link_libraries(crfzitd PRIVATE
     dl
     -pthread
 )
-# 添加头文件目录
 set(RUST_CXX_GEN_INCLUDE_DIR ${RUST_BUILD_DIR}/cxxbridge/crfzit_core/src/lib.rs.h)
 target_include_directories(crfzitd PRIVATE
-    cpp # 【路径修正】: 包含 cpp/ 目录，这样 #include "grpc_server.h" 才能工作
+    cpp
     ${RUST_CXX_GEN_INCLUDE_DIR}/../..
     ${RUST_CXX_GEN_INCLUDE_DIR}/..
     ${PROTO_GEN_DIR}
