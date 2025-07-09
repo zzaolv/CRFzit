@@ -1,4 +1,4 @@
-# 文件路径: /CRFzit/daemon/CMakeLists.txt (决战最终版)
+# 文件路径: /CRFzit/daemon/CMakeLists.txt (最终语法修正版)
 
 cmake_minimum_required(VERSION 3.20)
 project(crfzitd CXX C)
@@ -40,12 +40,11 @@ set(RUST_BRIDGE_LIBRARY_PATH ${RUST_OUTPUT_DIR}/libcrfzit_cxx_bridge.a)
 ExternalProject_Add(
     rust_logic_lib_build
     SOURCE_DIR        ${RUST_SRC_DIR}
-    # 【最终修正】: 使用 BUILD_IN_SOURCE 选项，或者在 BUILD_COMMAND 中 cd
-    # 我们选择更明确的 BUILD_COMMAND，以避免任何歧义
-    BUILD_COMMAND     cd ${RUST_SRC_DIR} && \
-                      ${CMAKE_COMMAND} -E env \
-                          CARGO_TARGET_DIR=${RUST_BUILD_DIR} \
-                          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=${CMAKE_CXX_COMPILER} \
+    # 【最终语法修正】: 移除所有行尾的反斜杠 "\"
+    BUILD_COMMAND     cd ${RUST_SRC_DIR} &&
+                      ${CMAKE_COMMAND} -E env
+                          CARGO_TARGET_DIR=${RUST_BUILD_DIR}
+                          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=${CMAKE_CXX_COMPILER}
                           cargo build --release --target aarch64-linux-android
     CONFIGURE_COMMAND ""
     INSTALL_COMMAND   ""
