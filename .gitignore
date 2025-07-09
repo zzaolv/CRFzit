@@ -1,0 +1,20 @@
+# IDE files
+.idea/
+.gradle/
+build/
+local.properties
+*.iml
+
+# Keystore files
+*.jks
+*.keystore
+
+# Log files
+*.log
+
+# C/C++ build artifacts
+/daemon/cpp/build/
+/daemon/rust/target/
+
+# Local configuration
+.DS_Store
