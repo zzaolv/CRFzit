@@ -1,4 +1,4 @@
-# 文件路径: /CRFzit/daemon/CMakeLists.txt (最终决战版)
+# 文件路径: /CRFzit/daemon/CMakeLists.txt (最终决战版 - 对齐验证过的版本)
 
 cmake_minimum_required(VERSION 3.20)
 project(crfzitd CXX C)
@@ -9,25 +9,24 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build all libraries statically")
 
+
 # --- 2. 依赖管理 ---
 include(FetchContent)
 set(gRPC_INSTALL OFF CACHE BOOL "Disable gRPC install")
 set(protobuf_INSTALL OFF CACHE BOOL "Disable Protobuf install")
 set(ABSL_INSTALL OFF CACHE BOOL "Disable Abseil install")
 
-# 【最终修正】: 为 gRPC 的子依赖 BoringSSL 禁用 FIPS 模块
-# 这个选项需要通过 gRPC 的构建系统传递下去
-set(OPENSSL_NO_FIPS ON CACHE BOOL "Disable FIPS module in BoringSSL")
-
 FetchContent_Declare(
     gRPC
     GIT_REPOSITORY https://github.com/grpc/grpc.git
+    # 【最终修正】: 使用经过大规模交叉编译验证的 v1.49.x 版本
     GIT_TAG        v1.49.2
     GIT_SUBMODULES_RECURSE TRUE
 )
 set(gRPC_BUILD_TESTS OFF CACHE BOOL "Disable gRPC tests")
 set(gRPC_BUILD_CSHARP_EXT OFF CACHE BOOL "Disable gRPC C# extensions")
 FetchContent_MakeAvailable(gRPC)
+
 
 # --- 3. Rust 库集成 ---
 include(ExternalProject)
@@ -60,6 +59,7 @@ add_library(crfzit_cxx_bridge STATIC IMPORTED GLOBAL)
 set_property(TARGET crfzit_cxx_bridge PROPERTY IMPORTED_LOCATION ${RUST_BRIDGE_LIBRARY_PATH})
 add_dependencies(crfzit_cxx_bridge rust_logic_lib_build)
 
+
 # --- 4. Protobuf/gRPC C++ 代码生成 ---
 set(PROTO_SRC_DIR ${DAEMON_ROOT}/../ipc/proto)
 set(PROTO_FILES ${PROTO_SRC_DIR}/crfzit.proto)
@@ -76,6 +76,7 @@ add_custom_command(
 add_library(crfzit_proto ${PROTO_GEN_DIR}/crfzit.pb.cc ${PROTO_GEN_DIR}/crfzit.grpc.pb.cc)
 target_include_directories(crfzit_proto PUBLIC ${PROTO_GEN_DIR})
 target_link_libraries(crfzit_proto PUBLIC protobuf::libprotobuf grpc)
+
 
 # --- 5. 定义 crfzitd 可执行文件 ---
 add_executable(crfzitd
