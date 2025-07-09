@@ -1,0 +1,29 @@
+# 文件路径: /CRFzit/daemon/deps.CMakeLists.txt
+# 它的唯一职责是下载、编译并安装 gRPC 及其所有依赖。
+
+cmake_minimum_required(VERSION 3.20)
+project(crfzit_dependencies CXX C)
+
+# --- 1. 全局设置 ---
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build all libraries statically")
+
+# --- 2. 依赖管理 ---
+include(FetchContent)
+# 所有 gRPC 的子模块都会被自动安装，无需单独设置
+set(gRPC_INSTALL ON CACHE BOOL "Enable gRPC install") 
+
+FetchContent_Declare(
+    gRPC
+    GIT_REPOSITORY https://github.com/grpc/grpc.git
+    GIT_TAG        v1.49.2 # 使用经过验证的稳定版本
+    GIT_SUBMODULES_RECURSE TRUE
+)
+
+# 禁用我们不需要的功能
+set(gRPC_BUILD_TESTS OFF CACHE BOOL "Disable gRPC tests")
+set(gRPC_BUILD_CSHARP_EXT OFF CACHE BOOL "Disable gRPC C# extensions")
+
+FetchContent_MakeAvailable(gRPC)
