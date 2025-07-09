@@ -1,8 +1,9 @@
-// 文件路径: /CRFzit/daemon/rust/build.rs
+// 文件路径: /CRFzit/daemon/rust/build.rs (修正版)
 
 fn main() {
-    cxx_build::bridge("src/lib.rs") // 包含 #[cxx::bridge] 的文件
-        .file("src/logic_controller.rs") // 包含 "Rust" 函数实现的文件
+    cxx_build::bridge("src/lib.rs")
+        // logic_controller.rs 包含 LogicController 的实现，必须被编译
+        .file("src/logic_controller.rs") 
         .flag_if_supported("-std=c++17")
         .compile("crfzit_cxx_bridge");
 

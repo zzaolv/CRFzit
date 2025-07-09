@@ -1,4 +1,4 @@
-# 文件路径: /CRFzit/daemon/rust/Cargo.toml
+# 文件路径: /CRFzit/daemon/rust/Cargo.toml (修正版)
 
 [package]
 name = "crfzit_core"
@@ -10,15 +10,11 @@ name = "crfzit_core_logic"
 crate-type = ["staticlib"]
 
 [dependencies]
-# FFI bridge to C++
 cxx = "1.0"
-
-# Database
 rusqlite = { version = "0.31.0", features = ["bundled"] }
-
-# Logging
 log = "0.4"
 env_logger = "0.11"
+once_cell = "1.19.0" # <<< 新增依赖
 
 [build-dependencies]
 cxx-build = "1.0"
