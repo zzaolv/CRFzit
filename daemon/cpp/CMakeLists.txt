@@ -1,113 +1,93 @@
-# /CRFzit/daemon/cpp/CMakeLists.txt
+# 文件路径: /CRFzit/daemon/cpp/CMakeLists.txt (全新)
 
 cmake_minimum_required(VERSION 3.20)
-
 project(crfzitd CXX C)
 
-# --- 基本配置 ---
+# --- 1. 全局设置 ---
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build all libraries statically")
 
-# --- 目标：crfzitd 可执行文件 ---
-add_executable(crfzitd main.cpp)
-
-# --- Rust 库集成 ---
-# 我们需要告诉CMake去哪里找Rust编译产物
-# Rust的编译将由我们的外部脚本 `remote_build.sh` 控制
-# 这里我们假设它已经被编译好了
-
-# Rust库的路径 (相对于构建目录)
-set(RUST_LIB_DIR ${CMAKE_SOURCE_DIR}/../rust/target/aarch64-linux-android/release)
-# cxx生成的头文件路径
-set(RUST_CXX_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/../rust/target/cxxbridge/crfzit/daemon/rust/src/lib.rs.h)
-
-# 添加Rust库的头文件目录
-target_include_directories(crfzitd PRIVATE ${CMAKE_SOURCE_DIR}/../rust/)
-target_include_directories(crfzitd PRIVATE ${CMAKE_BINARY_DIR}) # For generated headers
-
-# 链接Rust静态库
-find_library(CRFZIT_RUST_LIB
-    NAMES crfzit_core_logic
-    PATHS ${RUST_LIB_DIR}
-    NO_DEFAULT_PATH)
-
-if(NOT CRFZIT_RUST_LIB)
-    message(FATAL_ERROR "crfzit_core_logic static library not found! Ensure Rust part is built first.")
-endif()
-
-target_link_libraries(crfzitd PRIVATE ${CRFZIT_RUST_LIB})
-
-# --- gRPC 和 Protobuf 集成 ---
-# 我们将使用CMake的FetchContent从源码构建gRPC，以确保与NDK的兼容性
+# --- 2. 依赖管理 (gRPC 和 libev) ---
 include(FetchContent)
+set(gRPC_INSTALL OFF CACHE BOOL "Disable gRPC install")
+set(protobuf_INSTALL OFF CACHE BOOL "Disable Protobuf install")
+set(ABSL_INSTALL OFF CACHE BOOL "Disable Abseil install")
 
-# protobuf
 FetchContent_Declare(
-    protobuf
-    GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git
-    GIT_TAG        v25.3 # 使用一个稳定版本
-    GIT_SHALLOW    TRUE
-)
-FetchContent_MakeAvailable(protobuf)
-
-# gRPC
-FetchContent_Declare(
-    grpc
+    gRPC
     GIT_REPOSITORY https://github.com/grpc/grpc.git
-    GIT_TAG        v1.62.2 # 使用一个稳定版本
-    GIT_SHALLOW    TRUE
+    GIT_TAG        v1.49.2 # 使用经过验证的稳定版本
+    GIT_SUBMODULES_RECURSE TRUE
 )
-set(gRPC_BUILD_CSHARP_EXT OFF CACHE BOOL "" FORCE) # 禁用不需要的语言
-set(gRPC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(grpc)
+set(gRPC_BUILD_TESTS OFF CACHE BOOL "Disable gRPC tests")
+set(gRPC_BUILD_CSHARP_EXT OFF CACHE BOOL "Disable gRPC C# extensions")
+FetchContent_MakeAvailable(gRPC)
 
-# --- 从 .proto 文件生成代码 ---
-# 找到protoc编译器
-find_program(PROTOC_COMPILER protoc)
-get_target_property(GRPC_CPP_PLUGIN gRPC::grpc_cpp_plugin LOCATION)
+# libev for event loop
+# FetchContent_Declare(
+#     libev
+#     GIT_REPOSITORY https://github.com/enki/libev.git
+#     GIT_TAG        master
+# )
+# set(EV_SRC_DIR ${fetchcontent_SOURCE_DIR_LIBEV})
+# FetchContent_MakeAvailable(libev)
 
-set(PROTO_SRC_DIR ${CMAKE_SOURCE_DIR}/../../ipc/proto)
-set(PROTO_DEST_DIR ${CMAKE_BINARY_DIR}/generated-sources)
-file(MAKE_DIRECTORY ${PROTO_DEST_DIR})
 
-file(GLOB PROTO_FILES "${PROTO_SRC_DIR}/*.proto")
+# --- 3. Protobuf/gRPC C++ 代码生成 ---
+set(DAEMON_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
+set(PROTO_SRC_DIR ${DAEMON_ROOT}/../ipc/proto)
+set(PROTO_FILES ${PROTO_SRC_DIR}/crfzit.proto)
+set(PROTO_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/gen/proto)
+set(GRPC_CPP_PLUGIN_EXE $<TARGET_FILE:grpc_cpp_plugin>)
 
-# 添加一个自定义命令来生成 .pb.cc, .pb.h, .grpc.pb.cc, .grpc.pb.h
 add_custom_command(
-    OUTPUT
-        ${PROTO_DEST_DIR}/crfzit.pb.cc
-        ${PROTO_DEST_DIR}/crfzit.pb.h
-        ${PROTO_DEST_DIR}/crfzit.grpc.pb.cc
-        ${PROTO_DEST_DIR}/crfzit.grpc.pb.h
-    COMMAND ${PROTOC_COMPILER}
-        -I ${PROTO_SRC_DIR}
-        --cpp_out=${PROTO_DEST_DIR}
-        --grpc_out=${PROTO_DEST_DIR}
-        --plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN}
-        ${PROTO_FILES}
+    OUTPUT ${PROTO_GEN_DIR}/crfzit.pb.cc ${PROTO_GEN_DIR}/crfzit.pb.h ${PROTO_GEN_DIR}/crfzit.grpc.pb.cc ${PROTO_GEN_DIR}/crfzit.grpc.pb.h
+    COMMAND protobuf::protoc
+        --grpc_out=${PROTO_GEN_DIR} --cpp_out=${PROTO_GEN_DIR} -I ${PROTO_SRC_DIR}
+        --plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN_EXE} ${PROTO_FILES}
     DEPENDS ${PROTO_FILES}
-    COMMENT "Generating gRPC/Protobuf C++ sources"
 )
-add_custom_target(GenerateProtoSources DEPENDS ${PROTO_DEST_DIR}/crfzit.pb.cc)
-add_dependencies(crfzitd GenerateProtoSources)
+add_library(crfzit_proto ${PROTO_GEN_DIR}/crfzit.pb.cc ${PROTO_GEN_DIR}/crfzit.grpc.pb.cc)
+target_include_directories(crfzit_proto PUBLIC ${PROTO_GEN_DIR})
+target_link_libraries(crfzit_proto PUBLIC protobuf::libprotobuf grpc)
 
-# 将生成的源文件添加到目标
-target_sources(crfzitd PRIVATE
-    ${PROTO_DEST_DIR}/crfzit.pb.cc
-    ${PROTO_DEST_DIR}/crfzit.grpc.pb.cc
+# --- 4. Rust 库链接 (不再用 ExternalProject，由外部脚本编译) ---
+# 我们将由外部脚本先编译好 Rust 库，这里只负责链接
+set(RUST_BUILD_DIR ${DAEMON_ROOT}/rust/target)
+set(RUST_LIB_DIR ${RUST_BUILD_DIR}/aarch64-linux-android/release)
+find_library(CRFZIT_LOGIC_LIB NAMES crfzit_core_logic PATHS ${RUST_LIB_DIR} REQUIRED)
+find_library(CRFZIT_BRIDGE_LIB NAMES crfzit_cxx_bridge PATHS ${RUST_LIB_DIR} REQUIRED)
+
+# --- 5. 定义 crfzitd 可执行文件 ---
+add_executable(crfzitd
+    main.cpp
+    grpc_server.cpp
+    kernel_interface.cpp
+    shell_executor.cpp
+    # timer_manager.cpp
 )
-# 将生成的头文件目录包含进来
-target_include_directories(crfzitd PRIVATE ${PROTO_DEST_DIR})
 
-# --- 链接 gRPC 和其他依赖 ---
 target_link_libraries(crfzitd PRIVATE
-    gRPC::grpc++
+    crfzit_proto
+    ${CRFZIT_LOGIC_LIB}
+    ${CRFZIT_BRIDGE_LIB}
+    grpc++
     protobuf::libprotobuf
+    # ev
+    log
+    dl
+    -pthread # pthreads for std::thread
 )
 
-# Android平台链接时需要的额外库
-target_link_libraries(crfzitd PRIVATE log dl)
-
-# --- 安装指令 ---
-# 定义安装路径，这样构建后可以轻松找到可执行文件
-install(TARGETS crfzitd DESTINATION bin)
+# 头文件包含路径
+set(RUST_CXX_GEN_INCLUDE_DIR ${RUST_BUILD_DIR}/cxxbridge/crfzit_core/src/lib.rs.h)
+target_include_directories(crfzitd PRIVATE
+    .
+    # 包含 cxx 生成的头文件的上两级目录
+    ${RUST_CXX_GEN_INCLUDE_DIR}/../..
+    ${RUST_CXX_GEN_INCLUDE_DIR}/..
+    ${PROTO_GEN_DIR}
+)
+add_dependencies(crfzitd crfzit_proto)

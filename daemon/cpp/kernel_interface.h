@@ -1,0 +1,4 @@
+#ifndef CRFZIT_KERNEL_INTERFACE_H
+#define CRFZIT_KERNEL_INTERFACE_H
+// 暂时为空
+#endif
