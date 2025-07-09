@@ -1,4 +1,4 @@
-# 文件路径: /CRFzit/daemon/cpp/CMakeLists.txt (全新)
+# 文件路径: /CRFzit/daemon/cpp/CMakeLists.txt (最终集大成版)
 
 cmake_minimum_required(VERSION 3.20)
 project(crfzitd CXX C)
@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build all libraries statically")
+
 
 # --- 2. 依赖管理 (gRPC 和 libev) ---
 include(FetchContent)
@@ -25,18 +26,40 @@ set(gRPC_BUILD_TESTS OFF CACHE BOOL "Disable gRPC tests")
 set(gRPC_BUILD_CSHARP_EXT OFF CACHE BOOL "Disable gRPC C# extensions")
 FetchContent_MakeAvailable(gRPC)
 
-# libev for event loop
-# FetchContent_Declare(
-#     libev
-#     GIT_REPOSITORY https://github.com/enki/libev.git
-#     GIT_TAG        master
-# )
-# set(EV_SRC_DIR ${fetchcontent_SOURCE_DIR_LIBEV})
-# FetchContent_MakeAvailable(libev)
+
+# --- 3. Rust 库编译 (使用 ExternalProject) ---
+include(ExternalProject)
+get_filename_component(DAEMON_ROOT ${CMAKE_SOURCE_DIR}/.. ABSOLUTE)
+set(RUST_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/rust_build)
+set(RUST_OUTPUT_DIR ${RUST_BUILD_DIR}/aarch64-linux-android/release)
+set(RUST_LIBRARY_PATH ${RUST_OUTPUT_DIR}/libcrfzit_core_logic.a)
+set(RUST_BRIDGE_LIBRARY_PATH ${RUST_OUTPUT_DIR}/libcrfzit_cxx_bridge.a)
+
+ExternalProject_Add(
+    rust_logic_lib_build
+    SOURCE_DIR ${DAEMON_ROOT}/rust
+    CONFIGURE_COMMAND ""
+    INSTALL_COMMAND ""
+    BUILD_COMMAND ${CMAKE_COMMAND} -E env
+                  CARGO_TARGET_DIR=${RUST_BUILD_DIR}
+                  # 告诉 cargo 使用 NDK 的链接器
+                  CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=${CMAKE_CXX_COMPILER}
+                  cargo build --release --target aarch64-linux-android
+    # 【关键】: 使用 BYPRODUCTS 明确声明此命令会生成的文件
+    BYPRODUCTS ${RUST_LIBRARY_PATH} ${RUST_BRIDGE_LIBRARY_PATH}
+)
+
+# 为 Rust 库和 Bridge 库创建 IMPORTED 目标
+add_library(crfzit_core_logic STATIC IMPORTED)
+set_property(TARGET crfzit_core_logic PROPERTY IMPORTED_LOCATION ${RUST_LIBRARY_PATH})
+add_dependencies(crfzit_core_logic rust_logic_lib_build)
+
+add_library(crfzit_cxx_bridge STATIC IMPORTED)
+set_property(TARGET crfzit_cxx_bridge PROPERTY IMPORTED_LOCATION ${RUST_BRIDGE_LIBRARY_PATH})
+add_dependencies(crfzit_cxx_bridge rust_logic_lib_build)
 
 
-# --- 3. Protobuf/gRPC C++ 代码生成 ---
-set(DAEMON_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# --- 4. Protobuf/gRPC C++ 代码生成 ---
 set(PROTO_SRC_DIR ${DAEMON_ROOT}/../ipc/proto)
 set(PROTO_FILES ${PROTO_SRC_DIR}/crfzit.proto)
 set(PROTO_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/gen/proto)
@@ -53,12 +76,6 @@ add_library(crfzit_proto ${PROTO_GEN_DIR}/crfzit.pb.cc ${PROTO_GEN_DIR}/crfzit.g
 target_include_directories(crfzit_proto PUBLIC ${PROTO_GEN_DIR})
 target_link_libraries(crfzit_proto PUBLIC protobuf::libprotobuf grpc)
 
-# --- 4. Rust 库链接 (不再用 ExternalProject，由外部脚本编译) ---
-# 我们将由外部脚本先编译好 Rust 库，这里只负责链接
-set(RUST_BUILD_DIR ${DAEMON_ROOT}/rust/target)
-set(RUST_LIB_DIR ${RUST_BUILD_DIR}/aarch64-linux-android/release)
-find_library(CRFZIT_LOGIC_LIB NAMES crfzit_core_logic PATHS ${RUST_LIB_DIR} REQUIRED)
-find_library(CRFZIT_BRIDGE_LIB NAMES crfzit_cxx_bridge PATHS ${RUST_LIB_DIR} REQUIRED)
 
 # --- 5. 定义 crfzitd 可执行文件 ---
 add_executable(crfzitd
@@ -66,28 +83,24 @@ add_executable(crfzitd
     grpc_server.cpp
     kernel_interface.cpp
     shell_executor.cpp
-    # timer_manager.cpp
 )
 
 target_link_libraries(crfzitd PRIVATE
     crfzit_proto
-    ${CRFZIT_LOGIC_LIB}
-    ${CRFZIT_BRIDGE_LIB}
+    crfzit_core_logic
+    crfzit_cxx_bridge
     grpc++
     protobuf::libprotobuf
-    # ev
     log
     dl
-    -pthread # pthreads for std::thread
+    -pthread
 )
-
 # 头文件包含路径
 set(RUST_CXX_GEN_INCLUDE_DIR ${RUST_BUILD_DIR}/cxxbridge/crfzit_core/src/lib.rs.h)
 target_include_directories(crfzitd PRIVATE
     .
-    # 包含 cxx 生成的头文件的上两级目录
     ${RUST_CXX_GEN_INCLUDE_DIR}/../..
     ${RUST_CXX_GEN_INCLUDE_DIR}/..
     ${PROTO_GEN_DIR}
 )
-add_dependencies(crfzitd crfzit_proto)
+add_dependencies(crfzitd crfzit_proto rust_logic_lib_build)
