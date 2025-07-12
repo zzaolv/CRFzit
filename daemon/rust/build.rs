@@ -1,10 +1,10 @@
-fn main() {
-    // 告诉 cxx-build 在哪里寻找 bridge 定义
-    cxx_build::bridge("src/lib.rs")
-        .compile("crfzit_core"); // 定义编译产物的名称
+// File: ~/projects/CRFzit/daemon/rust/build.rs
 
-    // 告诉 Cargo 何时重新运行此脚本
+fn main() {
+    cxx_build::bridge("src/lib.rs")
+        .file("src/cxx_bridge_impl.rs") // 未来可以把实现放在这里
+        .compile("crfzit_cxx");
+
     println!("cargo:rerun-if-changed=src/lib.rs");
-    // 如果有其他包含文件，也需要在这里添加
-    // println!("cargo:rerun-if-changed=src/my_other_file.rs");
+    println!("cargo:rerun-if-changed=src/cxx_bridge_impl.rs");
 }

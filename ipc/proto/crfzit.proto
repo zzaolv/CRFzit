@@ -1,13 +1,11 @@
+// File: ~/projects/CRFzit/ipc/proto/crfzit.proto
+
 syntax = "proto3";
 
 package crfzit.ipc;
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
-
-option cc_generic_services = true;
-option java_package = "com.crfzit.ipc";
-option java_multiple_files = true;
 
 // --- Enums ---
 
@@ -48,30 +46,6 @@ enum AppDisplayStatus {
   PENDING_FREEZE = 4;     // 等待冻结
 }
 
-// 事件来源
-enum EventSource {
-    SOURCE_UNKNOWN = 0;
-    CRFZIT_CONSOLE = 1;
-    CRFZIT_OBSERVER = 2;
-    CRFZITD_INTERNAL = 3;
-}
-
-// 事件类型
-enum EventType {
-    TYPE_UNKNOWN = 0;
-    // Observer a-reportable events
-    BROADCAST_RECEIVED = 1;
-    WAKELOCK_ACQUIRED = 2;
-    ALARM_TRIGGERED = 3;
-    // Internal & Console events
-    APP_CONFIG_CHANGED = 10;
-    SYSTEM_BOOT_COMPLETED = 11;
-    SCREEN_ON = 12;
-    SCREEN_OFF = 13;
-    FORCE_FREEZE_ALL = 14;
-}
-
-
 // --- Messages ---
 
 // 单个应用的完整配置
@@ -96,8 +70,6 @@ message AppRuntimeState {
   int64 memory_usage_kb = 4;
   float cpu_usage_percent = 5;
   int32 pending_freeze_sec = 6;      // 如果是PENDING_FREEZE，剩余秒数
-
-  // --- 用于UI状态指示器的布尔标志 ---
   bool is_whitelisted = 10;
   bool has_playback = 11;
   bool has_notification = 12;
@@ -105,54 +77,51 @@ message AppRuntimeState {
   bool is_foreground = 14;
 }
 
-// 包装AppRuntimeState列表，用于流式传输
 message ActiveAppsStateList {
     repeated AppRuntimeState apps = 1;
 }
 
-// 全局系统状态
 message GlobalStats {
   float total_cpu_usage_percent = 1;
   int64 total_mem_kb = 2;
   int64 avail_mem_kb = 3;
-  int64 network_speed_down_bps = 4; // bits per second
-  int64 network_speed_up_bps = 5;   // bits per second
+  int64 network_speed_down_bps = 4;
+  int64 network_speed_up_bps = 5;
   string active_profile_name = 6;
 }
 
-// 事件日志
 message EventLog {
   google.protobuf.Timestamp timestamp = 1;
   string event_description = 2;
 }
 
-// 从Observer上报的Framework事件
 message FrameworkEvent {
-    EventSource source = 1;
-    EventType type = 2;
-    google.protobuf.Timestamp timestamp = 3;
-    int32 uid = 4;
-    string package_name = 5;
-    map<string, string> extra_data = 6; // e.g., "action" -> "android.intent.action.BATTERY_CHANGED"
+  enum EventType {
+    UNKNOWN = 0;
+    BROADCAST_RECEIVED = 1;
+    WAKELOCK_ACQUIRED = 2;
+  }
+  EventType event_type = 1;
+  int32 uid = 2;
+  string package_name = 3;
+  string event_details = 4;
 }
 
 // --- Services ---
 
-// 配置服务 (UI -> Daemon)
 service ConfigService {
   rpc SetAppConfig(AppConfig) returns (google.protobuf.Empty);
   rpc GetAllConfigs(google.protobuf.Empty) returns (stream AppConfig);
-  rpc GetAppConfig(AppConfig) returns (AppConfig);
 }
 
-// 仪表盘数据服务 (Daemon -> UI)
 service DashboardService {
   rpc StreamGlobalStats(google.protobuf.Empty) returns (stream GlobalStats);
   rpc StreamActiveAppsState(google.protobuf.Empty) returns (stream ActiveAppsStateList);
   rpc GetEventLogs(google.protobuf.Empty) returns (stream EventLog);
 }
 
-// 内部系统服务 (Observer -> Daemon)
 service SystemService {
   rpc ReportFrameworkEvent(FrameworkEvent) returns (google.protobuf.Empty);
+  // 用于初期测试的简单 RPC
+  rpc Ping(google.protobuf.Empty) returns (google.protobuf.Empty);
 }

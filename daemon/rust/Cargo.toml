@@ -1,26 +1,16 @@
+# File: ~/projects/CRFzit/daemon/rust/Cargo.toml
+
 [package]
 name = "crfzit_core"
-version = "1.0.0"
+version = "0.1.0"
 edition = "2021"
 
 [lib]
+name = "crfzit_core"
 crate-type = ["staticlib"]
 
 [dependencies]
-# CXX FFI 桥
 cxx = "1.0"
 
-# 异步运行时和工具
-tokio = { version = "1.32", features = ["full"] }
-
-# 日志
-log = "0.4"
-env_logger = "0.10"
-
-# 用于全局状态的单次初始化
-once_cell = "1.18"
-
-
 [build-dependencies]
-# CXX 的构建时代码生成器
 cxx-build = "1.0"
