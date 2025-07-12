@@ -2,56 +2,77 @@ syntax = "proto3";
 
 package crfzit.ipc;
 
-// 导入 google.protobuf.Empty 用于无参数或返回值的RPC
-// 导入 google.protobuf.Timestamp 用于时间戳
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
-// --- 服务选项，用于指定包名 ---
+option cc_generic_services = true;
 option java_package = "com.crfzit.ipc";
 option java_multiple_files = true;
 
-// --- Enums: 定义各种策略和状态 ---
+// --- Enums ---
 
 // 冻结模式
 enum FreezeMode {
-  V2_FREEZE = 0; // cgroup v2 freezer
-  V1_FREEZE = 1; // cgroup v1 freezer (兼容旧内核)
-  SIGSTOP = 2;   // SIGSTOP信号
-  KILL = 3;      // 杀死进程
+  V2_FREEZE = 0;    // cgroup v2 freezer (推荐)
+  V1_FREEZE = 1;    // cgroup v1 freezer (旧版内核备用)
+  SIGSTOP = 2;      // SIGSTOP信号
+  KILL = 3;         // 杀死进程
 }
 
 // 网络策略
 enum NetworkPolicy {
-  NET_ALLOW_ALL = 0;  // 允许所有网络
-  NET_WIFI_ONLY = 1;  // 仅允许Wi-Fi
-  NET_BLOCK_ALL = 2;  // 阻止所有网络
+  NET_ALLOW_ALL = 0;
+  NET_WIFI_ONLY = 1;
+  NET_BLOCK_ALL = 2;
 }
 
 // OOM Score 优先级
 enum OomPriority {
-  OOM_HIGH = 0;   // 高优先级 (不易被杀)
-  OOM_MEDIUM = 1; // 中等优先级
-  OOM_LOW = 2;    // 低优先级 (容易被杀)
+  OOM_HIGH = 0;     // 不易被杀
+  OOM_MEDIUM = 1;   // 默认
+  OOM_LOW = 2;      // 容易被杀
 }
 
-// 前台识别策略
+// 前台策略
 enum ForegroundPolicy {
-  STRICT = 0;   // 严格模式: 仅拥有TopActivity时视为前台
-  LENIENT = 1;  // 宽松模式: 可根据子选项豁免
+  STRICT = 0;       // 仅顶层可见Activity
+  LENIENT = 1;      // 包含前台服务等
 }
 
-// 仪表盘上显示的应用状态枚举
+// 仪表盘使用的聚合应用状态
 enum AppDisplayStatus {
   FOREGROUND = 0;         // 前台
-  BACKGROUND_ACTIVE = 1;  // 后台活动
+  BACKGROUND_ACTIVE = 1;  // 后台活动 (因豁免策略)
   FROZEN = 2;             // 已冻结
-  KILLED = 3;             // 已杀死/休眠
+  KILLED = 3;             // 已杀死
   PENDING_FREEZE = 4;     // 等待冻结
 }
 
+// 事件来源
+enum EventSource {
+    SOURCE_UNKNOWN = 0;
+    CRFZIT_CONSOLE = 1;
+    CRFZIT_OBSERVER = 2;
+    CRFZITD_INTERNAL = 3;
+}
 
-// --- Messages: 定义数据结构 ---
+// 事件类型
+enum EventType {
+    TYPE_UNKNOWN = 0;
+    // Observer a-reportable events
+    BROADCAST_RECEIVED = 1;
+    WAKELOCK_ACQUIRED = 2;
+    ALARM_TRIGGERED = 3;
+    // Internal & Console events
+    APP_CONFIG_CHANGED = 10;
+    SYSTEM_BOOT_COMPLETED = 11;
+    SCREEN_ON = 12;
+    SCREEN_OFF = 13;
+    FORCE_FREEZE_ALL = 14;
+}
+
+
+// --- Messages ---
 
 // 单个应用的完整配置
 message AppConfig {
@@ -60,81 +81,78 @@ message AppConfig {
   NetworkPolicy network_policy = 3;
   OomPriority oom_priority = 4;
   ForegroundPolicy foreground_policy = 5;
-  bool lenient_allow_playback = 6;       // 宽松模式: 允许后台播放
-  bool lenient_allow_notification = 7;   // 宽松模式: 允许常驻通知
-  bool lenient_allow_network = 8;        // 宽松模式: 允许高速网络
-  bool is_whitelisted = 9;               // 是否在白名单 (后台自由)
-  bool allow_fcm_wakeup = 10;            // 是否允许FCM唤醒
+  bool lenient_allow_playback = 6;
+  bool lenient_allow_notification = 7;
+  bool lenient_allow_network = 8;
+  bool is_whitelisted = 9;
+  bool allow_fcm_wakeup = 10;
 }
 
-// 仪表盘上单个应用的实时运行时状态
+// 仪表盘上单个应用的运行时状态
 message AppRuntimeState {
   string package_name = 1;
   AppDisplayStatus display_status = 2;
-  FreezeMode active_freeze_mode = 3; // 如果是FROZEN，指明具体方式 (V2, V1, SIGSTOP)
-  int64 memory_usage_kb = 4;         // 内存使用 (KB)
-  float cpu_usage_percent = 5;       // CPU使用率 (%)
+  FreezeMode active_freeze_mode = 3; // 如果是FROZEN，指明具体方式
+  int64 memory_usage_kb = 4;
+  float cpu_usage_percent = 5;
   int32 pending_freeze_sec = 6;      // 如果是PENDING_FREEZE，剩余秒数
-  
-  // --- 状态指示器布尔值 ---
-  bool is_whitelisted = 10;        // 🛡️
-  bool has_playback = 11;          // 🎵
-  bool has_notification = 12;      // 🔔
-  bool has_network_activity = 13;  // 📡
-  bool is_foreground = 14;         // ▶️
+
+  // --- 用于UI状态指示器的布尔标志 ---
+  bool is_whitelisted = 10;
+  bool has_playback = 11;
+  bool has_notification = 12;
+  bool has_network_activity = 13;
+  bool is_foreground = 14;
 }
 
-// 仪表盘的全局系统状态
+// 包装AppRuntimeState列表，用于流式传输
+message ActiveAppsStateList {
+    repeated AppRuntimeState apps = 1;
+}
+
+// 全局系统状态
 message GlobalStats {
   float total_cpu_usage_percent = 1;
   int64 total_mem_kb = 2;
   int64 avail_mem_kb = 3;
-  int64 network_speed_down_bps = 4; // 下载速度 (bits per second)
-  int64 network_speed_up_bps = 5;   // 上传速度 (bits per second)
-  string active_profile_name = 6;   // 当前情景模式名称
+  int64 network_speed_down_bps = 4; // bits per second
+  int64 network_speed_up_bps = 5;   // bits per second
+  string active_profile_name = 6;
 }
 
-// 事件时间线日志条目
+// 事件日志
 message EventLog {
   google.protobuf.Timestamp timestamp = 1;
   string event_description = 2;
 }
 
-// 从 system_server (Observer) 发送给 crfzitd 的框架层事件
+// 从Observer上报的Framework事件
 message FrameworkEvent {
-  // 待定义, 例如应用状态变化、广播事件等
-  // v1.0 暂时留空
+    EventSource source = 1;
+    EventType type = 2;
+    google.protobuf.Timestamp timestamp = 3;
+    int32 uid = 4;
+    string package_name = 5;
+    map<string, string> extra_data = 6; // e.g., "action" -> "android.intent.action.BATTERY_CHANGED"
 }
 
-// 包含所有活动应用状态的列表，用于一次性推送
-message ActiveAppsStateList {
-    repeated AppRuntimeState apps = 1;
-}
+// --- Services ---
 
-// --- Services: 定义RPC接口 ---
-
-// 配置管理服务
+// 配置服务 (UI -> Daemon)
 service ConfigService {
-  // 设置单个应用的配置
   rpc SetAppConfig(AppConfig) returns (google.protobuf.Empty);
-  // 获取所有已配置的应用
   rpc GetAllConfigs(google.protobuf.Empty) returns (stream AppConfig);
-  // 更多配置相关的RPC...
+  rpc GetAppConfig(AppConfig) returns (AppConfig);
 }
 
-// 仪表盘数据流服务
+// 仪表盘数据服务 (Daemon -> UI)
 service DashboardService {
-  // 流式传输全局状态
   rpc StreamGlobalStats(google.protobuf.Empty) returns (stream GlobalStats);
-  // 流式传输活动应用状态列表 (注意：此处修改为一次性推送列表，以简化客户端逻辑)
   rpc StreamActiveAppsState(google.protobuf.Empty) returns (stream ActiveAppsStateList);
-  // 获取历史事件日志
   rpc GetEventLogs(google.protobuf.Empty) returns (stream EventLog);
 }
 
-// 系统交互服务
+// 内部系统服务 (Observer -> Daemon)
 service SystemService {
-  // Observer 上报框架事件
   rpc ReportFrameworkEvent(FrameworkEvent) returns (google.protobuf.Empty);
-  // 更多系统级操作的RPC...
 }
