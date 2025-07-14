@@ -17,17 +17,20 @@ espressoCore = "3.6.1"
 annotation = "1.8.0"
 
 # <<< 新增: JSON处理库 >>>
-gson = "2.10.1"
+gson = "2.13.1"
 
 # <<< 已移除: gRPC & Protobuf 版本 >>>
 # grpc = "1.62.2"
 # protobuf = "3.25.3"
 # grpcKotlin = "1.4.1"
 # protobufPlugin = "0.9.4"
+lifecycleKtx = "2.9.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+
+androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycleKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleViewmodelCompose" }
 androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }

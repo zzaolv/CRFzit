@@ -9,6 +9,4 @@ plugins {
     // <<< 新增：在这里只声明，不应用 >>>
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.0" apply false
 
-    // 声明 Protobuf 插件
-    alias(libs.plugins.google.protobuf) apply false
 }
