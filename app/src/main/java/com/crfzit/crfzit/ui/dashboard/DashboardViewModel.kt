@@ -7,18 +7,26 @@ import com.crfzit.crfzit.data.model.GlobalStats
 import com.crfzit.crfzit.data.repository.DashboardRepository
 import com.crfzit.crfzit.data.repository.UdsDashboardRepository
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 
 data class DashboardUiState(
     val globalStats: GlobalStats = GlobalStats(),
     val activeApps: List<AppRuntimeState> = emptyList(),
     val isLoading: Boolean = true,
-    val isConnected: Boolean = false // 新增连接状态
+    val isConnected: Boolean = false
 )
 
 class DashboardViewModel(
-    // 提供一个默认的真实 Repository 实例
-    private val repository: DashboardRepository = UdsDashboardRepository(viewModelScope)
+    // 构造函数现在接受一个可空的 Repository，用于测试注入
+    private val injectedRepository: DashboardRepository? = null
 ) : ViewModel() {
+
+    // 使用 by lazy 实现懒加载，完美解决初始化顺序问题
+    private val repository: DashboardRepository by lazy {
+        // 如果外部传入了 repository (例如在测试中)，就用它
+        // 否则，创建我们默认的真实 repository 实例，此时 viewModelScope 已可用
+        injectedRepository ?: UdsDashboardRepository(viewModelScope)
+    }
 
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
@@ -28,24 +36,21 @@ class DashboardViewModel(
     }
 
     private fun observeDashboardData() {
+        // 在这里调用 launch 时，repository 属性会通过 by lazy 被首次初始化
         viewModelScope.launch {
-            // 合并两个流
             repository.getGlobalStatsStream()
                 .combine(repository.getAppRuntimeStateStream()) { stats, apps ->
                     DashboardUiState(
                         globalStats = stats,
                         activeApps = apps,
                         isLoading = false,
-                        isConnected = true // 收到数据意味着已连接
+                        isConnected = true
                     )
                 }
                 .onStart {
-                    // 在开始收集前，可以设置一个超时来判断是否连接失败
-                    // 这里简化处理，初始为loading
                     _uiState.value = DashboardUiState(isLoading = true)
                 }
                 .catch { e ->
-                    // 流出现错误
                     _uiState.value = _uiState.value.copy(isLoading = false, isConnected = false)
                 }
                 .collect { newState ->

@@ -1,88 +1,42 @@
 #include "uds_server.h"
+#include "db_manager.h"
+#include "state_manager.h"
 #include "nlohmann/json.hpp"
 #include <iostream>
 #include <csignal>
 #include <thread>
 #include <chrono>
-#include <random>
+#include <filesystem> // 需要 C++17
 
 #include <android/log.h>
-#define LOG_TAG "crfzitd"
+#define LOG_TAG "crfzitd_main"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
-#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 using json = nlohmann::json;
 
 const std::string SOCKET_PATH = "crfzit_socket";
-UdsServer* g_server = nullptr;
+// 数据目录，与 Magisk service.sh 中创建的目录一致
+const std::string DATA_DIR = "/data/adb/crfzit";
+const std::string DB_PATH = DATA_DIR + "/crfzit.db";
+
+// 全局指针，用于信号处理和线程间通信
+std::unique_ptr<UdsServer> g_server = nullptr;
+std::shared_ptr<StateManager> g_state_manager = nullptr;
 std::atomic<bool> g_is_running = true;
 
-// 模拟数据生成函数
-json generate_mock_dashboard_update() {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<> cpu_dist(10.0, 60.0);
-    std::uniform_int_distribution<> mem_dist(4 * 1024 * 1024, 5 * 1024 * 1024);
-    std::uniform_int_distribution<> net_dist(0, 2 * 1024 * 1024 * 8);
-
-    json payload;
-    payload["global_stats"] = {
-        {"total_cpu_usage_percent", cpu_dist(gen)},
-        {"total_mem_kb", 8 * 1024 * 1024},
-        {"avail_mem_kb", mem_dist(gen)},
-        {"net_down_speed_bps", net_dist(gen)},
-        {"net_up_speed_bps", net_dist(gen) / 4},
-        {"active_profile_name", "常规模式"}
-    };
-
-    payload["apps_runtime_state"] = json::array({
-        {
-            {"package_name", "com.tencent.tmgp.sgame"},
-            {"app_name", "王者荣耀"},
-            {"display_status", "FOREGROUND_GAME"},
-            {"active_freeze_mode", nullptr},
-            {"mem_usage_kb", 1258291},
-            {"cpu_usage_percent", 45.1},
-            {"is_whitelisted", false},
-            {"is_foreground", true}
-        },
-        {
-            {"package_name", "com.taobao.taobao"},
-            {"app_name", "淘宝"},
-            {"display_status", "FROZEN"},
-            {"active_freeze_mode", "CGROUP"},
-            {"mem_usage_kb", 184320},
-            {"cpu_usage_percent", 0.0},
-            {"is_whitelisted", false},
-            {"is_foreground", false}
-        },
-        {
-            {"package_name", "com.zhihu.android"},
-            {"app_name", "知乎"},
-            {"display_status", "FROZEN"},
-            {"active_freeze_mode", "SIGSTOP"},
-            {"mem_usage_kb", 153600},
-            {"cpu_usage_percent", 0.0},
-            {"is_whitelisted", false},
-            {"is_foreground", false}
-        }
-    });
-
-    json update_message;
-    update_message["type"] = "stream";
-    update_message["command"] = "dashboard_update";
-    update_message["payload"] = payload;
-
-    return update_message;
-}
-
-
-// 数据广播线程
+// 数据广播线程，现在使用 StateManager 的数据
 void data_broadcaster() {
     while (g_is_running) {
-        if (g_server) {
-            json msg = generate_mock_dashboard_update();
-            g_server->broadcast_message(msg.dump());
+        if (g_server && g_state_manager) {
+            json payload = g_state_manager->get_dashboard_update_payload();
+            
+            json update_message;
+            update_message["type"] = "stream";
+            update_message["command"] = "dashboard_update";
+            update_message["payload"] = payload;
+
+            g_server->broadcast_message(update_message.dump());
         }
         std::this_thread::sleep_for(std::chrono::seconds(2));
     }
@@ -101,18 +55,32 @@ int main() {
     signal(SIGTERM, signal_handler);
     signal(SIGINT, signal_handler);
 
-    LOGI("CRFzit Daemon v1.1 (JSON Broadcaster) starting...");
+    LOGI("CRFzit Daemon v1.2 (Core Logic) starting...");
+
+    // 确保数据目录存在
+    try {
+        if (!std::filesystem::exists(DATA_DIR)) {
+            std::filesystem::create_directories(DATA_DIR);
+            LOGI("Created data directory: %s", DATA_DIR.c_str());
+        }
+    } catch(const std::filesystem::filesystem_error& e) {
+        LOGE("Failed to create data directory: %s", e.what());
+        return 1;
+    }
+
+    // --- 初始化核心组件 ---
+    auto db_manager = std::make_shared<DbManager>(DB_PATH);
+    g_state_manager = std::make_shared<StateManager>(db_manager);
+    g_server = std::make_unique<UdsServer>(SOCKET_PATH);
     
-    UdsServer server(SOCKET_PATH);
-    g_server = &server;
-    
-    // 启动数据广播线程
+    // --- 启动后台线程 ---
     std::thread broadcaster_thread(data_broadcaster);
 
-    // 主线程运行UDS服务器
-    server.run();
+    // --- 主线程运行UDS服务器 ---
+    g_server->run();
     
-    g_is_running = false; // 确保广播线程退出
+    // --- 清理 ---
+    g_is_running = false;
     if (broadcaster_thread.joinable()) {
         broadcaster_thread.join();
     }
