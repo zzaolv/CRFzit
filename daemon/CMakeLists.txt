@@ -15,7 +15,7 @@ add_executable(crfzitd
 
 # --- 3. 链接库 ---
 # log 库用于 Android Logcat 输出
-target_link_libraries(crfzitd PRIVATE log pthread)
+target_link_libraries(crfzitd PRIVATE log)
 
 # --- 4. 设置 C++ 标准 ---
 set_target_properties(crfzitd PROPERTIES CXX_STANDARD 17)
