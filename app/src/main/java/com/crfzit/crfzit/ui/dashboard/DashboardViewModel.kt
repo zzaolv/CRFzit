@@ -2,27 +2,22 @@ package com.crfzit.crfzit.ui.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.crfzit.crfzit.data.model.AppRuntimeState
+import com.crfzit.crfzit.data.model.GlobalStats
 import com.crfzit.crfzit.data.repository.DashboardRepository
-import com.crfzit.crfzit.data.repository.MockDashboardRepository
-import com.crfzit.ipc.ActiveAppsStateList
-import com.crfzit.ipc.AppRuntimeState
-import com.crfzit.ipc.GlobalStats
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.launch
+import com.crfzit.crfzit.data.repository.UdsDashboardRepository
+import kotlinx.coroutines.flow.*
 
-// UI状态数据类
 data class DashboardUiState(
-    val globalStats: GlobalStats = GlobalStats.getDefaultInstance(),
+    val globalStats: GlobalStats = GlobalStats(),
     val activeApps: List<AppRuntimeState> = emptyList(),
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val isConnected: Boolean = false // 新增连接状态
 )
 
 class DashboardViewModel(
-    // 以后这里会通过Hilt等依赖注入框架来提供真实的Repository
-    private val repository: DashboardRepository = MockDashboardRepository()
+    // 提供一个默认的真实 Repository 实例
+    private val repository: DashboardRepository = UdsDashboardRepository(viewModelScope)
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -34,19 +29,26 @@ class DashboardViewModel(
 
     private fun observeDashboardData() {
         viewModelScope.launch {
-            // 使用 combine 操作符将两个数据流合并
-            // 当任何一个流发出新数据时，都会重新计算并更新UI状态
+            // 合并两个流
             repository.getGlobalStatsStream()
-                .combine(repository.getActiveAppsStateStream()) { stats, appsList ->
-                    // 返回一个新的UI状态对象
+                .combine(repository.getAppRuntimeStateStream()) { stats, apps ->
                     DashboardUiState(
                         globalStats = stats,
-                        activeApps = appsList.appsList, // 从 ActiveAppsStateList 中取出列表
-                        isLoading = false
+                        activeApps = apps,
+                        isLoading = false,
+                        isConnected = true // 收到数据意味着已连接
                     )
                 }
+                .onStart {
+                    // 在开始收集前，可以设置一个超时来判断是否连接失败
+                    // 这里简化处理，初始为loading
+                    _uiState.value = DashboardUiState(isLoading = true)
+                }
+                .catch { e ->
+                    // 流出现错误
+                    _uiState.value = _uiState.value.copy(isLoading = false, isConnected = false)
+                }
                 .collect { newState ->
-                    // 将合并后的新状态赋值给 StateFlow
                     _uiState.value = newState
                 }
         }

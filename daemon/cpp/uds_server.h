@@ -5,27 +5,33 @@
 #include <thread>
 #include <vector>
 #include <atomic>
+#include <mutex>
 
 class UdsServer {
 public:
-    // 构造函数，指定UDS路径
     UdsServer(const std::string& socket_path);
-    // 析构函数
     ~UdsServer();
 
-    // 启动服务器监听
     void run();
-    // 停止服务器
     void stop();
 
+    // 新增: 向所有连接的客户端广播消息
+    void broadcast_message(const std::string& message);
+
 private:
-    // 处理单个客户端连接的函数
     void handle_client(int client_fd);
+    void add_client(int client_fd);
+    void remove_client(int client_fd);
 
     std::string socket_path_;
     int server_fd_;
     std::atomic<bool> is_running_;
-    std::vector<std::thread> client_threads_;
+    
+    // 客户端管理
+    std::vector<int> client_fds_;
+    std::mutex client_mutex_;
+
+    // 移除 client_threads_，因为 handle_client 现在在主接受线程中管理
 };
 
 #endif //CRFZITD_UDS_SERVER_H

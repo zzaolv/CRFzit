@@ -1,13 +1,11 @@
 [versions]
-agp = "8.11.0" # 使用一个较新的稳定AGP版本
-kotlin = "2.0.0" # 使用与Compose Compiler兼容的Kotlin版本
-# Compose Compiler 版本应与Kotlin版本对应，在composeOptions中指定
+agp = "8.11.0"
+kotlin = "2.0.0"
 composeCompiler = "1.5.1"
 coreKtx = "1.13.1"
 lifecycleRuntimeKtx = "2.8.3"
 activityCompose = "1.9.1"
-composeBom = "2024.06.00" # 使用最新的稳定BOM
-# ViewModel Compose 版本应与Lifecycle版本对应
+composeBom = "2024.06.00"
 lifecycleViewmodelCompose = "2.8.3"
 
 # Testing
@@ -15,14 +13,17 @@ junit = "4.13.2"
 junitVersion = "1.2.1"
 espressoCore = "3.6.1"
 
-# gRPC & Protobuf
-grpc = "1.62.2" # 保持您的版本
-protobuf = "3.25.3"
-grpcKotlin = "1.4.1"
-protobufPlugin = "0.9.4"
-
 # Annotation
 annotation = "1.8.0"
+
+# <<< 新增: JSON处理库 >>>
+gson = "2.10.1"
+
+# <<< 已移除: gRPC & Protobuf 版本 >>>
+# grpc = "1.62.2"
+# protobuf = "3.25.3"
+# grpcKotlin = "1.4.1"
+# protobufPlugin = "0.9.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -46,16 +47,19 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 
-# gRPC & Protobuf
-grpc-okhttp = { group = "io.grpc", name = "grpc-okhttp", version.ref = "grpc" }
-grpc-protobuf-lite = { group = "io.grpc", name = "grpc-protobuf-lite", version.ref = "grpc" }
-grpc-stub = { group = "io.grpc", name = "grpc-stub", version.ref = "grpc" }
-grpc-kotlin-stub = { group = "io.grpc", name = "grpc-kotlin-stub", version.ref = "grpcKotlin" }
-grpc-protobuf = { group = "io.grpc", name = "grpc-protobuf", version.ref = "grpc" } # <<< 新增/替换这一行
-# Protobuf代码生成器需要(在插件块中使用)
-protoc = { group = "com.google.protobuf", name = "protoc", version.ref = "protobuf" }
+# <<< 新增: Gson 依赖 >>>
+gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
+
+# <<< 已移除: gRPC & Protobuf 依赖 >>>
+# grpc-okhttp = ...
+# grpc-protobuf-lite = ...
+# grpc-stub = ...
+# grpc-kotlin-stub = ...
+# grpc-protobuf = ...
+# protoc = ...
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-google-protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
+# <<< 已移除: Protobuf 插件 >>>
+# google-protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }

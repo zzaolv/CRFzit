@@ -1,9 +1,7 @@
-import com.google.protobuf.gradle.*
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.google.protobuf)
+    // <<< 已移除: alias(libs.plugins.google.protobuf) >>>
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -13,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.crfzit.crfzit"
-        minSdk = 30
+        minSdk = 30 // 保持不变
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -55,13 +53,8 @@ android {
         }
     }
 
-    sourceSets {
-        getByName("main") {
-            proto {
-                srcDir("../ipc/proto")
-            }
-        }
-    }
+    // <<< 已移除: Protobuf sourceSets 配置 >>>
+    // sourceSets { ... }
 }
 
 dependencies {
@@ -77,6 +70,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.annotation)
 
+    // <<< 新增: Gson 依赖 >>>
+    implementation(libs.gson)
+
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.junit)
@@ -85,43 +81,8 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
-    // gRPC 和 Protobuf 相关依赖
-    implementation(libs.grpc.okhttp)
-    implementation(libs.grpc.stub)
-    implementation(libs.grpc.kotlin.stub)
-
-    // *** 关键修改：使用完整的 protobuf-java ***
-    implementation(libs.grpc.protobuf) // 使用新的库别名
-    implementation("com.google.protobuf:protobuf-java-util:${libs.versions.protobuf.get()}") // 推荐加入
-
-    // implementation(libs.grpc.protobuf.lite) // 移除 lite
-    // implementation("com.google.protobuf:protobuf-javalite:3.25.3") // 移除 javalite
+    // <<< 已移除: 所有 gRPC 和 Protobuf 相关依赖 >>>
 }
 
-
-// Protobuf 配置块
-configure<ProtobufExtension> {
-    protoc {
-        artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
-    }
-    plugins {
-        id("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:${libs.versions.grpc.get()}"
-        }
-        id("grpckt") {
-            artifact = "io.grpc:protoc-gen-grpc-kotlin:${libs.versions.grpcKotlin.get()}:jdk8@jar"
-        }
-    }
-    generateProtoTasks {
-        all().forEach { task ->
-            task.plugins {
-                id("grpc")
-                id("grpckt")
-            }
-            // *** 关键修改：移除 lite 选项 ***
-            task.builtins {
-                create("java")
-            }
-        }
-    }
-}
+// <<< 已移除: 整个 Protobuf 配置块 >>>
+// configure<ProtobufExtension> { ... }

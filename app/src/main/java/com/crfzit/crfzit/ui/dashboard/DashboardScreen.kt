@@ -1,6 +1,5 @@
 package com.crfzit.crfzit.ui.dashboard
 
-import androidx.compose.material3.ExperimentalMaterial3Api // 确保导入
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,17 +12,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.crfzit.ipc.AppDisplayStatus
-import com.crfzit.ipc.AppRuntimeState
-import com.crfzit.ipc.FreezeMode
-import com.crfzit.ipc.GlobalStats
+import com.crfzit.crfzit.data.model.AppRuntimeState
+import com.crfzit.crfzit.data.model.DisplayStatus
+import com.crfzit.crfzit.data.model.FreezeMode
+import com.crfzit.crfzit.data.model.GlobalStats
 import java.util.Locale
 
-
-@OptIn(ExperimentalMaterial3Api::class) // <--- 添加这一行
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel = viewModel()
@@ -32,7 +31,12 @@ fun DashboardScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("CRFzit Dashboard") })
+            TopAppBar(
+                title = { Text("CRFzit Dashboard") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            )
         }
     ) { paddingValues ->
         Column(
@@ -42,7 +46,15 @@ fun DashboardScreen(
         ) {
             if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("等待连接守护进程...")
+                    }
+                }
+            } else if (!uiState.isConnected) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                     Text("连接守护进程失败！\n请检查模块是否正常运行。", textAlign = TextAlign.Center)
                 }
             } else {
                 GlobalStatsHeader(stats = uiState.globalStats)
@@ -57,9 +69,9 @@ fun DashboardScreen(
 fun GlobalStatsHeader(stats: GlobalStats) {
     val memUsedGb = (stats.totalMemKb - stats.availMemKb) / (1024.0 * 1024.0)
     val memTotalGb = stats.totalMemKb / (1024.0 * 1024.0)
-    val netDownMbps = stats.networkSpeedDownBps / (1024.0 * 1024.0)
-    val netUpKbps = stats.networkSpeedUpBps / 1024.0
-    
+    val netDownMbps = stats.netDownSpeedBps / (1024.0 * 1024.0 * 8) // 注意是 bps
+    val netUpKbps = stats.netUpSpeedBps / (1024.0 * 8)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -81,7 +93,6 @@ fun ActiveAppsList(apps: List<AppRuntimeState>) {
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // 使用 packageName 作为 key，可以获得更好的性能和动画效果
         items(items = apps, key = { it.packageName }) { app ->
             AppStatusCard(app = app)
         }
@@ -96,41 +107,32 @@ fun AppStatusCard(app: AppRuntimeState) {
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // 模拟应用图标
                 Box(
                     modifier = Modifier
                         .size(40.dp)
                         .background(Color.LightGray, shape = MaterialTheme.shapes.medium),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(text = getAppName(app.packageName).take(2).uppercase(Locale.ROOT), fontWeight = FontWeight.Bold)
+                    Text(text = app.appName.take(2).uppercase(Locale.ROOT), fontWeight = FontWeight.Bold)
                 }
-                
                 Spacer(modifier = Modifier.width(12.dp))
-                
-                // 应用名
                 Text(
-                    text = getAppName(app.packageName),
+                    text = app.appName,
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.weight(1f)
                 )
-
-                // 状态指示器图标
                 AppStatusIndicators(app = app)
             }
             Spacer(modifier = Modifier.height(8.dp))
-            
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // 资源占用
                 Text(
-                    text = "MEM: ${app.memoryUsageKb / 1024} MB   CPU: ${"%.1f".format(app.cpuUsagePercent)}%",
+                    text = "MEM: ${app.memUsageKb / 1024} MB   CPU: ${"%.1f".format(app.cpuUsagePercent)}%",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )
-                // 详细状态文本
                 Text(
                     text = getStatusText(app),
                     style = MaterialTheme.typography.bodySmall,
@@ -145,53 +147,39 @@ fun AppStatusCard(app: AppRuntimeState) {
 fun AppStatusIndicators(app: AppRuntimeState) {
     Row {
         if (app.isForeground) Text("▶️", modifier = Modifier.padding(horizontal = 2.dp))
+        if (app.displayStatus == DisplayStatus.FOREGROUND_GAME) Text("🎮", modifier = Modifier.padding(horizontal = 2.dp))
         if (app.isWhitelisted) Text("🛡️", modifier = Modifier.padding(horizontal = 2.dp))
         if (app.hasPlayback) Text("🎵", modifier = Modifier.padding(horizontal = 2.dp))
         if (app.hasNotification) Text("🔔", modifier = Modifier.padding(horizontal = 2.dp))
         if (app.hasNetworkActivity) Text("📡", modifier = Modifier.padding(horizontal = 2.dp))
-        
+
         when(app.displayStatus) {
-            AppDisplayStatus.FROZEN -> {
+            DisplayStatus.FROZEN -> {
                 val freezeMethod = when(app.activeFreezeMode) {
-                    FreezeMode.V2_FREEZE -> "(V2)"
-                    FreezeMode.V1_FREEZE -> "(V1)"
+                    FreezeMode.CGROUP -> "(CG)"
                     FreezeMode.SIGSTOP -> "(ST)"
                     else -> ""
                 }
                 Text("❄️ $freezeMethod", modifier = Modifier.padding(horizontal = 2.dp))
             }
-            AppDisplayStatus.KILLED -> {
-                 val killMethod = when(app.activeFreezeMode) {
-                    FreezeMode.KILL -> "(KILL)"
-                    else -> ""
-                }
-                Text("🧊 $killMethod", modifier = Modifier.padding(horizontal = 2.dp))
+            DisplayStatus.KILLED -> {
+                Text("🧊", modifier = Modifier.padding(horizontal = 2.dp))
             }
-            AppDisplayStatus.PENDING_FREEZE -> Text("⏳", modifier = Modifier.padding(horizontal = 2.dp))
-            else -> {} // 其他状态不显示特殊图标
+            DisplayStatus.PENDING_FREEZE -> Text("⏳", modifier = Modifier.padding(horizontal = 2.dp))
+            else -> {}
         }
     }
 }
 
 fun getStatusText(app: AppRuntimeState): String {
     return when(app.displayStatus) {
-        AppDisplayStatus.FOREGROUND -> "前台 / " + if (app.isWhitelisted) "白名单" else "活动中"
-        AppDisplayStatus.BACKGROUND_ACTIVE -> {
-            when {
-                app.hasPlayback -> "后台播放 / 活动中"
-                app.hasNetworkActivity -> "网速豁免 / 活动中"
-                app.hasNotification -> "通知豁免 / 活动中"
-                else -> "后台 / 活动中"
-            }
-        }
-        AppDisplayStatus.FROZEN -> "已冻结 (${app.activeFreezeMode.name.replace("_FREEZE","")})"
-        AppDisplayStatus.KILLED -> "已杀死"
-        AppDisplayStatus.PENDING_FREEZE -> "等待冻结 (剩 ${app.pendingFreezeSec}s)"
+        DisplayStatus.FOREGROUND_GAME -> "前台 / 游戏中"
+        DisplayStatus.FOREGROUND -> "前台 / 活动中"
+        DisplayStatus.BACKGROUND_ACTIVE -> "后台 / 活动中"
+        DisplayStatus.FROZEN -> "已冻结 (${app.activeFreezeMode?.name ?: "N/A"})"
+        DisplayStatus.KILLED -> "已杀死"
+        DisplayStatus.PENDING_FREEZE -> "等待冻结..."
+        DisplayStatus.UNFROZEN_BY_PROFILE -> "已解冻 (场景模式)"
         else -> "未知状态"
     }
-}
-
-// 模拟从包名获取应用名
-fun getAppName(packageName: String): String {
-    return packageName.substringAfterLast('.').replaceFirstChar { it.titlecase(Locale.getDefault()) }
 }
