@@ -3,7 +3,8 @@ project(crfzitd CXX C)
 
 # --- 1. 构建我们自己提供的 sqlite3 库 ---
 set(SQLITE3_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sqlite3)
-add_library(sqlite3_lib STATIC ${SQLITECPP_SRC_DIR}/sqlite3.c)
+# 使用正确的变量 SQLITE3_SRC_DIR
+add_library(sqlite3_lib STATIC ${SQLITE3_SRC_DIR}/sqlite3.c)
 target_include_directories(sqlite3_lib PUBLIC ${SQLITE3_SRC_DIR})
 
 
